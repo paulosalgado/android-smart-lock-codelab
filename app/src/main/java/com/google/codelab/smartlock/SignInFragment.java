@@ -25,6 +25,9 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ProgressBar;
+import android.widget.Toast;
+
+import com.google.android.gms.auth.api.credentials.Credential;
 
 public class SignInFragment extends Fragment {
 
@@ -38,12 +41,14 @@ public class SignInFragment extends Fragment {
 
     @Override
     public View onCreateView(LayoutInflater layoutInflater, ViewGroup container, Bundle savedInstanceState) {
+
         View view = layoutInflater.inflate(R.layout.fragment_sign_in, container, false);
         mUsernameTextInputLayout = view.findViewById(R.id.usernameTextInputLayout);
         mPasswordTextInputLayout = view.findViewById(R.id.passwordTextInputLayout);
 
         mUsernameEditText = view.findViewById(R.id.usernameEditText);
         mUsernameEditText.addTextChangedListener(new TextWatcher() {
+
             @Override
             public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) {}
 
@@ -54,9 +59,12 @@ public class SignInFragment extends Fragment {
 
             @Override
             public void afterTextChanged(Editable editable) {}
+
         });
+
         mPasswordEditText = view.findViewById(R.id.passwordEditText);
         mPasswordEditText.addTextChangedListener(new TextWatcher() {
+
             @Override
             public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) {}
 
@@ -67,35 +75,45 @@ public class SignInFragment extends Fragment {
 
             @Override
             public void afterTextChanged(Editable editable) {}
+
         });
 
         mSignInButton = view.findViewById(R.id.signInButton);
         mSignInButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(final View view) {
+
                 setSignEnabled(false);
                 String username = mUsernameTextInputLayout.getEditText().getText().toString();
                 String password = mPasswordTextInputLayout.getEditText().getText().toString();
 
+                Credential credential = new Credential.Builder(username)
+                        .setPassword(password)
+                        .build();
 
-                // ************ Replace with Smart Lock sign in *****************
-                if (CodelabUtil.isValidCredential(username, password)) {
-                    ((MainActivity) getActivity()).goToContent();
+                if (CodelabUtil.isValidCredential(credential)) {
+
+                    ((MainActivity) getActivity()).saveCredential(credential);
+
                 } else {
-                    Log.d(TAG, "Credentials are invalid. Username or password are incorrect.");
+                    Log.d(TAG, "Credentials are invalid. Username or password are " +
+                            "incorrect.");
+                    Toast.makeText(view.getContext(), R.string.invalid_creds_toast_msg,
+                            Toast.LENGTH_SHORT).show();
                     setSignEnabled(true);
                 }
-                // **************** End Smart Lock sign in ***********************
             }
         });
 
         Button clearButton = view.findViewById(R.id.clearButton);
         clearButton.setOnClickListener(new View.OnClickListener() {
+
             @Override
             public void onClick(View view) {
                 mUsernameTextInputLayout.getEditText().setText("");
                 mPasswordTextInputLayout.getEditText().setText("");
             }
+
         });
 
         mSignInProgressBar = view.findViewById(R.id.signInProgress);
@@ -105,7 +123,9 @@ public class SignInFragment extends Fragment {
     }
 
     public void onResume() {
+
         super.onResume();
+
         if (((MainActivity) getActivity()).isResolving() || ((MainActivity) getActivity()).isRequesting()) {
             setSignEnabled(false);
         } else {
@@ -119,9 +139,11 @@ public class SignInFragment extends Fragment {
      * @param enable Enable form when true, disable when false.
      */
     protected void setSignEnabled(boolean enable) {
+
         mSignInButton.setEnabled(enable);
         mUsernameEditText.setEnabled(enable);
         mPasswordEditText.setEnabled(enable);
+
         if (!enable) {
             mSignInProgressBar.setVisibility(ProgressBar.VISIBLE);
         } else {
@@ -134,6 +156,7 @@ public class SignInFragment extends Fragment {
      * you should not indicate to the user when their username or password is incorrect until they submit.
      */
     private void validateUsernameLayouts(CharSequence charSequence) {
+
         if (!CodelabUtil.isValidUsernameSoFar(charSequence.toString())) {
             mUsernameTextInputLayout.setError(getString(R.string.invalid_username_error_msg));
         } else {
@@ -142,11 +165,14 @@ public class SignInFragment extends Fragment {
     }
 
     private void validatePasswordLayouts(CharSequence charSequence) {
+
         String currentUsername = mUsernameEditText.getText().toString();
+
         if (!CodelabUtil.isValidPasswordSoFar(currentUsername, charSequence.toString())) {
             mPasswordTextInputLayout.setError("invalid password");
         } else {
             mPasswordTextInputLayout.setError(null);
         }
     }
+
 }

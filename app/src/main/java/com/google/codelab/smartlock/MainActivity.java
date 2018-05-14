@@ -14,14 +14,29 @@
 package com.google.codelab.smartlock;
 
 import android.content.Intent;
+import android.content.IntentSender;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v4.app.Fragment;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
+import android.widget.Toast;
+
+import com.google.android.gms.auth.api.Auth;
+import com.google.android.gms.auth.api.credentials.Credential;
+import com.google.android.gms.auth.api.credentials.CredentialRequest;
+import com.google.android.gms.auth.api.credentials.CredentialRequestResult;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.CommonStatusCodes;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.common.api.Status;
 
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements
+        GoogleApiClient.ConnectionCallbacks,
+        GoogleApiClient.OnConnectionFailedListener {
 
     private static final String TAG = "MainActivity";
     private static final int RC_SAVE = 1;
@@ -36,14 +51,19 @@ public class MainActivity extends AppCompatActivity {
     private boolean mIsRequesting;
     private Handler mHandler;
 
-    // ********* Add member variables here ****************
-
-    // ************ End member variables ******************
+    private GoogleApiClient mGoogleApiClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        mGoogleApiClient = new GoogleApiClient.Builder(this)
+                .addConnectionCallbacks(this)
+                .enableAutoManage(this, 0, this)
+                .addApi(Auth.CREDENTIALS_API)
+                .build();
 
         setFragment(getIntent());
 
@@ -55,15 +75,18 @@ public class MainActivity extends AppCompatActivity {
         // When not using Smart Lock show set Fragment in onCreate.
         mHandler = new Handler();
         mHandler.postDelayed(new Runnable() {
+
             @Override
             public void run() {
                 setFragment(null);
             }
+
         }, DELAY_MILLIS);
     }
 
     @Override
     public void onSaveInstanceState(Bundle savedInstanceState) {
+
         // Save the user's current sign in state
         savedInstanceState.putBoolean(IS_RESOLVING, mIsResolving);
         savedInstanceState.putBoolean(IS_REQUESTING, mIsRequesting);
@@ -85,8 +108,10 @@ public class MainActivity extends AppCompatActivity {
      * @param intent Intent used to determine which Fragment is used.
      */
     private void setFragment(Intent intent) {
+
         Fragment fragment;
         String tag;
+
         if (intent != null && intent.hasCategory(Intent.CATEGORY_LAUNCHER)) {
             fragment = new SplashFragment();
             tag = SPLASH_TAG;
@@ -94,7 +119,9 @@ public class MainActivity extends AppCompatActivity {
             fragment = new SignInFragment();
             tag = SIGN_IN_TAG;
         }
+
         String currentTag = getCurrentFragmentTag();
+
         if (currentTag == null || !currentTag.equals(tag)) {
             getSupportFragmentManager().beginTransaction()
                     .replace(R.id.fragment_container, fragment, tag)
@@ -116,7 +143,9 @@ public class MainActivity extends AppCompatActivity {
      * @param enable Enable form when true, disable form when false.
      */
     private void setSignInEnabled(boolean enable) {
+
         Fragment fragment = getSupportFragmentManager().findFragmentByTag(SIGN_IN_TAG);
+
         if (fragment != null && fragment.isVisible()) {
             ((SignInFragment) fragment).setSignEnabled(enable);
         }
@@ -128,14 +157,17 @@ public class MainActivity extends AppCompatActivity {
      * @return Tag of currently set Fragment, or null if no fragment is set.
      */
     private String getCurrentFragmentTag() {
+
         List<Fragment> fragmentList = getSupportFragmentManager().getFragments();
         if (fragmentList == null || fragmentList.size() == 0) {
             return null;
         }
+
         Fragment fragment = fragmentList.get(0);
         if (fragment != null) {
             return fragment.getTag();
         }
+
         return null;
     }
 
@@ -156,44 +188,200 @@ public class MainActivity extends AppCompatActivity {
         return mIsRequesting;
     }
 
-    // **************** Add callbacks here *********************
+    @Override
+    public void onConnected(Bundle bundle) {
 
-    // TODO: Add callbacks
+        Log.d(TAG, "onConnected");
 
-    // **************** End callbacks here *********************
+        // Request Credentials once connected. If credentials are retrieved
+        // the user will either be automatically signed in or will be
+        // presented with credential options to be used by the application
+        // for sign in.
+        requestCredentials();
+    }
 
+    @Override
+    public void onConnectionSuspended(int cause) {
+        Log.d(TAG, "onConnectionSuspended: " + cause);
+    }
 
-    // **************** Add saveCredentials  here ***************
+    @Override
+    public void onConnectionFailed(ConnectionResult connectionResult) {
+        Log.d(TAG, "onConnectionFailed: " + connectionResult);
+    }
 
-    // TODO: implement saveCredentials
+    protected void saveCredential(Credential credential) {
 
-    // ****************** End saveCredentials ******************
+        // Credential is valid so save it.
+        Auth.CredentialsApi.save(mGoogleApiClient,
+                credential).setResultCallback(new ResultCallback<Status>() {
 
+            @Override
+            public void onResult(Status status) {
 
-    // **************** Add resolveResult here ***************
+                if (status.isSuccess()) {
 
-    // TODO: implement resolveResult
+                    Log.d(TAG, "Credential saved");
+                    goToContent();
 
-    // ****************** End resolveResult ******************
+                } else {
 
+                    Log.d(TAG, "Attempt to save credential failed " +
+                            status.getStatusMessage() + " " +
+                            status.getStatusCode());
+                    resolveResult(status, RC_SAVE);
+                }
+            }
 
-    // **************** Add onActivityResult here **************
+        });
+    }
 
-    // TODO: implement onActivityResult
+    private void resolveResult(Status status, int requestCode) {
 
-    // ****************** End onActivityResult *****************
+        // We don't want to fire multiple resolutions at once since that
+        // can   result in stacked dialogs after rotation or another
+        // similar event.
+        if (mIsResolving) {
+            Log.w(TAG, "resolveResult: already resolving.");
+            return;
+        }
 
+        Log.d(TAG, "Resolving: " + status);
+        if (status.hasResolution()) {
 
-    // *************** Add requestCredentials here *************
+            Log.d(TAG, "STATUS: RESOLVING");
 
-    // TODO: implement requestCredentials
+            try {
+                status.startResolutionForResult(this, requestCode);
+                mIsResolving = true;
+            } catch (IntentSender.SendIntentException e) {
+                Log.e(TAG, "STATUS: Failed to send resolution.", e);
+            }
 
-    // ****************** End requestCredentials ***************
+        } else {
+            goToContent();
+        }
+    }
 
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
 
-    // ************ Add processRequestCredential here **********
+        super.onActivityResult(requestCode, resultCode, data);
 
-    // TODO: implement processRequestCredential
+        Log.d(TAG, "onActivityResult:" + requestCode + ":" + resultCode + ":" +
+                data);
 
-    // ************* End processRequestCredential **************
+        if (requestCode == RC_READ) {
+
+            if (resultCode == RESULT_OK) {
+                Credential credential = data.getParcelableExtra(Credential.EXTRA_KEY);
+                processRetrievedCredential(credential);
+            } else {
+                Log.e(TAG, "Credential Read: NOT OK");
+                setSignInEnabled(true);
+            }
+
+        } else if (requestCode == RC_SAVE) {
+
+            Log.d(TAG, "Result code: " + resultCode);
+
+            if (resultCode == RESULT_OK) {
+                Log.d(TAG, "Credential Save: OK");
+            } else {
+                Log.e(TAG, "Credential Save Failed");
+            }
+
+            goToContent();
+        }
+
+        mIsResolving = false;
+    }
+
+    private void requestCredentials() {
+
+        setSignInEnabled(false);
+        mIsRequesting = true;
+
+        CredentialRequest request = new CredentialRequest.Builder()
+                .setSupportsPasswordLogin(true)
+                .build();
+
+        Auth.CredentialsApi.request(mGoogleApiClient, request).setResultCallback(
+                new ResultCallback<CredentialRequestResult>() {
+
+                    @Override
+                    public void onResult(CredentialRequestResult credentialRequestResult) {
+
+                        mIsRequesting = false;
+                        Status status = credentialRequestResult.getStatus();
+
+                        if (credentialRequestResult.getStatus().isSuccess()) {
+
+                            // Successfully read the credential without any user interaction, this
+                            // means there was only a single credential and the user has auto
+                            // sign-in enabled.
+                            Credential credential = credentialRequestResult.getCredential();
+                            processRetrievedCredential(credential);
+
+                        } else if (status.getStatusCode() == CommonStatusCodes.RESOLUTION_REQUIRED) {
+
+                            setFragment(null);
+
+                            // This is most likely the case where the user has multiple saved
+                            // credentials and needs to pick one.
+                            resolveResult(status, RC_READ);
+
+                        } else if (status.getStatusCode() == CommonStatusCodes.SIGN_IN_REQUIRED) {
+
+                            setFragment(null);
+
+                            // This is most likely the case where the user does not currently
+                            // have any saved credentials and thus needs to provide a username
+                            // and password to sign in.
+                            Log.d(TAG, "Sign in required");
+                            setSignInEnabled(true);
+
+                        } else {
+                            Log.w(TAG, "Unrecognized status code: " + status.getStatusCode());
+                            setFragment(null);
+                            setSignInEnabled(true);
+                        }
+                    }
+
+                }
+        );
+    }
+
+    private void processRetrievedCredential(Credential credential) {
+
+        if (CodelabUtil.isValidCredential(credential)) {
+            goToContent();
+        } else {
+            // This is likely due to the credential being changed outside of
+            // Smart Lock,
+            // ie: away from Android or Chrome. The credential should be deleted
+            // and the user allowed to enter a valid credential.
+            Log.d(TAG, "Retrieved credential invalid, so delete retrieved credential.");
+            Toast.makeText(this, "Retrieved credentials are invalid, so will be deleted.", Toast.LENGTH_LONG).show();
+            deleteCredential(credential);
+            requestCredentials();
+            setSignInEnabled(false);
+        }
+    }
+
+    private void deleteCredential(Credential credential) {
+        Auth.CredentialsApi.delete(mGoogleApiClient,
+                credential).setResultCallback(new ResultCallback<Status>() {
+            @Override
+            public void onResult(Status status) {
+                if (status.isSuccess()) {
+                    Log.d(TAG, "Credential successfully deleted.");
+                } else {
+                    // This may be due to the credential not existing, possibly
+                    // already deleted via another device/app.
+                    Log.d(TAG, "Credential not deleted successfully.");
+                }
+            }
+        });
+    }
+
 }

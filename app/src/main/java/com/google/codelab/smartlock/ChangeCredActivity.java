@@ -35,6 +35,7 @@ public class ChangeCredActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_change_cred);
 
@@ -54,16 +55,21 @@ public class ChangeCredActivity extends AppCompatActivity {
 
         Button saveButton = findViewById(R.id.saveButton);
         saveButton.setOnClickListener(new View.OnClickListener() {
+
             @Override
             public void onClick(View v) {
+
                 UsernamesAndPasswords.username1 = mUsername1TextInputLayout.getEditText().getText().toString();
                 UsernamesAndPasswords.password1 = mPassword1TextInputLayout.getEditText().getText().toString();
                 UsernamesAndPasswords.username2 = mUsername2TextInputLayout.getEditText().getText().toString();
                 UsernamesAndPasswords.password2 = mPassword2TextInputLayout.getEditText().getText().toString();
                 UsernamesAndPasswords.username3 = mUsername3TextInputLayout.getEditText().getText().toString();
                 UsernamesAndPasswords.password3 = mPassword3TextInputLayout.getEditText().getText().toString();
+
                 Toast.makeText(v.getContext(), R.string.creds_updated_msg, Toast.LENGTH_LONG).show();
             }
         });
+
     }
+
 }
